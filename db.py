@@ -5,7 +5,7 @@ import uuid
 
 import asyncpg
 
-from textutil import make_slug, tag_slug
+from textutil import make_slug, tag_slug, extract_urls
 
 pool: asyncpg.Pool | None = None
 
@@ -98,11 +98,15 @@ async def save_video(
 async def save_post(
     source: str, message_id: int, author_id: str, title: str | None, body: str | None, images: list[str]
 ) -> uuid.UUID:
+    # Text ba title theke URL khuje ber kora
+    urls = extract_urls(body or "") + extract_urls(title or "")
+    first_link = urls[0] if urls else None
+
     async with pool.acquire() as con:
         async with con.transaction():
             pid = await con.fetchval(
-                "insert into public.posts (author_id, title, body, images) values ($1, $2, $3, $4::jsonb) returning id",
-                uuid.UUID(author_id), title, body, json.dumps(images),
+                "insert into public.posts (author_id, title, body, images, video_url) values ($1, $2, $3, $4::jsonb, $5) returning id",
+                uuid.UUID(author_id), title, body, json.dumps(images), first_link
             )
             await mark(source, message_id, "post", pid, con)
     return pid
