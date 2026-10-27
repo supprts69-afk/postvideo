@@ -73,6 +73,27 @@ def _entity_urls(m) -> list[str]:
     return [e.url for e in (m.entities or []) if isinstance(e, MessageEntityTextUrl) and e.url]
 
 
+def _load_sources() -> list[dict]:
+    """TG_SOURCES parse kore. Common bhul (quote, 'TG_SOURCES=' prefix, curly quote) nijei thik kore."""
+    s = os.environ.get("TG_SOURCES", "").strip()
+    if s.upper().startswith("TG_SOURCES="):
+        s = s.split("=", 1)[1].strip()
+    s = s.replace("\u201c", '"').replace("\u201d", '"')
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in "'\"" and s[1] in "[{":
+        s = s[1:-1].strip()
+    if not s:
+        raise RuntimeError("TG_SOURCES faka. Render > Environment-e value boshao (je [ diye shuru hoy).")
+    try:
+        data = json.loads(s)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(
+            f"TG_SOURCES JSON bhul: {e.msg} (char {e.pos}); length={len(s)}, shuru={s[:1]!r}, shesh={s[-1:]!r}"
+        )
+    if isinstance(data, dict):
+        data = [data]
+    return data
+
+
 class Importer:
     def __init__(self) -> None:
         self.clients: list[TelegramClient] = []
@@ -110,7 +131,7 @@ class Importer:
         self.api_hash = os.environ["TG_API_HASH"].strip()
         session = os.getenv("TG_SESSION", "").strip()
         bot_token = os.getenv("TG_BOT_TOKEN", "").strip()
-        raw = json.loads(os.environ["TG_SOURCES"])
+        raw = _load_sources()
 
         user_items = [i for i in raw if i.get("via", "user") == "user"]
         bot_items = [i for i in raw if i.get("via") == "bot"]
