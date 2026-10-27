@@ -27,7 +27,6 @@ returning id
 async def init() -> None:
     global pool
     dsn = os.environ["DATABASE_URL"].replace("postgresql+asyncpg://", "postgresql://", 1)
-    # statement_cache_size=0 -> Supabase pgbouncer/pooler-er sathe lage
     pool = await asyncpg.create_pool(dsn, min_size=1, max_size=3, statement_cache_size=0, command_timeout=60)
 
 
@@ -69,10 +68,10 @@ async def save_video(
     async with pool.acquire() as con:
         async with con.transaction():
             cid = None
-            for _ in range(5):  # slug unique -> collision hole abar try
+            for _ in range(5):
                 slug = make_slug(title, "video")
                 try:
-                    async with con.transaction():  # savepoint
+                    async with con.transaction():
                         cid = await con.fetchval(
                             INSERT_CONTENT, owner, title, slug, description,
                             thumbnail_url, media_url, source_value, duration, is_short,
@@ -98,9 +97,18 @@ async def save_video(
 async def save_post(
     source: str, message_id: int, author_id: str, title: str | None, body: str | None, images: list[str]
 ) -> uuid.UUID:
-    # Text ba title theke URL khuje ber kora
     urls = extract_urls(body or "") + extract_urls(title or "")
     first_link = urls[0] if urls else None
+
+    if title:
+        for u in urls:
+            title = title.replace(u, "").strip()
+        title = title if title else None
+        
+    if body:
+        for u in urls:
+            body = body.replace(u, "").strip()
+        body = body if body else None
 
     async with pool.acquire() as con:
         async with con.transaction():
